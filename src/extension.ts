@@ -443,12 +443,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (e.affectsConfiguration('argus')) {
                 logger.info('Configuration changed — restart Argus to apply.');
                 vscode.window.showInformationMessage(
-                    'Argus configuration changed. Restart to apply.',
+                    'Argus configuration changed. Restart polling to apply repo and polling settings; '
+                    + 'pipeline settings (e.g. max iterations, concurrency) apply after a window reload.',
                     'Restart',
                 ).then((choice) => {
                     if (choice === 'Restart') {
+                        // Refresh the shared snapshot so later commands see the new values too.
+                        config = readConfig();
+                        logger.setLevel(config.logLevel);
+                        updateHealthView(config);
                         stopPolling();
-                        startPolling(readConfig(), context);
+                        startPolling(config, context);
                     }
                 });
             }

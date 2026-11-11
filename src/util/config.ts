@@ -10,6 +10,11 @@ import type { LogLevel } from './logger';
 import type { EmailConfig } from '../notifications/email';
 import type { PipelineConfig } from '../agent/pipeline';
 
+/** Bounds for argus.maxIterations — each iteration costs LLM calls. */
+export const MIN_CODING_ITERATIONS = 1;
+export const MAX_CODING_ITERATIONS = 20;
+export const DEFAULT_CODING_ITERATIONS = 5;
+
 export interface ArgusConfig {
     repos: RepoConfig[];
     defaultPollIntervalMinutes: number;
@@ -19,6 +24,17 @@ export interface ArgusConfig {
     dryRun: boolean;
     logLevel: LogLevel;
     email: EmailConfig;
+}
+
+/**
+ * Clamp a configured iteration count into [MIN_CODING_ITERATIONS, MAX_CODING_ITERATIONS].
+ * Non-numeric or non-finite values fall back to DEFAULT_CODING_ITERATIONS.
+ */
+export function clampCodingIterations(value: unknown): number {
+    const n = typeof value === 'number' && Number.isFinite(value)
+        ? Math.floor(value)
+        : DEFAULT_CODING_ITERATIONS;
+    return Math.min(MAX_CODING_ITERATIONS, Math.max(MIN_CODING_ITERATIONS, n));
 }
 
 export function readConfig(): ArgusConfig {
@@ -45,11 +61,16 @@ export function readConfig(): ArgusConfig {
         toAddresses: cfg.get('email.toAddresses', []),
     };
 
+    // package.json declares `argus.maxIterations`; `maxCodingIterations` is a legacy fallback.
+    const rawIterations = cfg.get<number>('maxIterations')
+        ?? cfg.get<number>('maxCodingIterations')
+        ?? DEFAULT_CODING_ITERATIONS;
+
     return {
         repos,
         defaultPollIntervalMinutes: defaultInterval,
         maxConcurrentIssues: cfg.get('maxConcurrentIssues', 3),
-        maxCodingIterations: cfg.get('maxCodingIterations', 5),
+        maxCodingIterations: clampCodingIterations(rawIterations),
         branchPrefix: cfg.get('branchPrefix', 'argus/'),
         dryRun: cfg.get('dryRun', false),
         logLevel: cfg.get('logLevel', 'info') as LogLevel,
